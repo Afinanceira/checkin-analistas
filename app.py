@@ -1,6 +1,7 @@
 from datetime import date
 from io import BytesIO
 import pandas as pd
+import plotly.express as px
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -9,11 +10,31 @@ import requests
 import streamlit as st
 
 # ==========================================
-# CONFIGURAÇÃO DO FIREBASE REALTIME DATABASE
+# CONFIGURAÇÃO DE DESIGN & STREAMLIT
 # ==========================================
+st.set_page_config(
+    page_title="Gestão de Desempenho | Operações",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
 FIREBASE_URL = "https://escala-nova-d596e-default-rtdb.firebaseio.com/checkins.json"
+ANALISTAS = ["Leandro", "Tarcyla", "Ivah"]
+
+TAREFAS = [
+    "1. Varredura de Pendências & Filas de Atendimento",
+    "2. Leitura & Checagem das Regras no Flash",
+    "3. Confirmação de Leitura nos Canais de Avisos",
+    "4. Monitoramento de Instabilidades & Provedores",
+    "5. Criação/Atualização de Atalhos & Macros",
+    "6. Passagem de Bastão & Log de Ocorrências",
+]
 
 
+# ==========================================
+# FUNÇÕES DE INTEGRAÇÃO FIREBASE
+# ==========================================
 def salvar_checkin_firebase(dados):
   try:
     response = requests.post(FIREBASE_URL, json=dados)
@@ -28,7 +49,6 @@ def buscar_checkins_firebase():
     response = requests.get(FIREBASE_URL)
     if response.status_code == 200 and response.json():
       dados_dict = response.json()
-      # Converte o dicionário retornado pelo Firebase em uma lista
       lista_dados = []
       for key, val in dados_dict.items():
         val["id"] = key
@@ -40,56 +60,66 @@ def buscar_checkins_firebase():
     return pd.DataFrame()
 
 
-# Lista de Demandas/Checklist Diário
-TAREFAS = [
-    "1. Verificação de Pendências e Filas",
-    "2. Acompanhamento dos Avisos e Canais",
-    "3. Leitura e Checagem do Flash",
-    "4. Monitoramento e Identificação de Instabilidades",
-    "5. Criação e Atualização de Atalhos",
-    "6. Passagem de Bastão e Registros do Turno",
-]
-
-ANALISTAS = ["Leandro", "Tarcyla", "Ivah"]
-
-st.set_page_config(
-    page_title="Check-in Diário da Equipe", page_icon="🔥", layout="wide"
-)
-
 # ==========================================
-# GERADOR DE PDF COM REPORTLAB
+# GERADOR DE PDF PROFISSIONAL & EXECUTIVO
 # ==========================================
-
-
-def gerar_pdf_relatorio(df_analista, nome_analista):
+def gerar_pdf_executivo(
+    df_analista, nome_analista, nota_supervisao, parecer_supervisao
+):
   buffer = BytesIO()
   doc = SimpleDocTemplate(
       buffer,
       pagesize=letter,
-      rightMargin=30,
-      leftMargin=30,
-      topMargin=30,
-      bottomMargin=30,
+      rightMargin=36,
+      leftMargin=36,
+      topMargin=36,
+      bottomMargin=36,
   )
   elements = []
   styles = getSampleStyleSheet()
 
+  # Estilos
   title_style = ParagraphStyle(
-      "TitleStyle",
+      "DocTitle",
       parent=styles["Heading1"],
-      fontSize=18,
-      textColor=colors.HexColor("#1E3A8A"),
-      spaceAfter=12,
+      fontSize=20,
+      leading=24,
+      textColor=colors.HexColor("#0F172A"),
+      fontName="Helvetica-Bold",
   )
 
+  sub_style = ParagraphStyle(
+      "SubTitle",
+      parent=styles["Normal"],
+      fontSize=10,
+      textColor=colors.HexColor("#475569"),
+      spaceAfter=15,
+  )
+
+  sec_title = ParagraphStyle(
+      "SecTitle",
+      parent=styles["Heading2"],
+      fontSize=12,
+      textColor=colors.HexColor("#1E3A8A"),
+      spaceBefore=10,
+      spaceAfter=6,
+      fontName="Helvetica-Bold",
+  )
+
+  # Cabeçalho Executivo
+  elements.append(
+      Paragraph("RELATÓRIO EXECUTIVO DE DESEMPENHO", title_style)
+  )
   elements.append(
       Paragraph(
-          f"<b>Relatório de Desempenho (30 Dias) - {nome_analista}</b>",
-          title_style,
+          f"<b>Analista Avaliado:</b> {nome_analista} | <b>Emissão:</b>"
+          f" {date.today().strftime('%d/%m/%Y')} | <b>Status:</b> Finalizado",
+          sub_style,
       )
   )
-  elements.append(Spacer(1, 10))
+  elements.append(Spacer(1, 5))
 
+  # Métricas Consolidadas
   total_registros = len(df_analista)
   total_possivel = total_registros * 6
   total_concluido = (
@@ -97,25 +127,55 @@ def gerar_pdf_relatorio(df_analista, nome_analista):
       if total_registros > 0
       else 0
   )
-
   taxa_eficiencia = (
       (total_concluido / total_possivel * 100) if total_possivel > 0 else 0
   )
+  total_atalhos = (
+      df_analista["qtd_atalhos"].sum() if "qtd_atalhos" in df_analista else 0
+  )
 
-  resumo_text = f"""
-    <b>Período Avaliado:</b> {total_registros} / 30 Dias Registrados<br/>
-    <b>Tarefas Concluídas:</b> {total_concluido} de {total_possivel} itens esperados<br/>
-    <b>Taxa Geral de Eficiência:</b> {taxa_eficiencia:.1f}%
-    """
-  elements.append(Paragraph(resumo_text, styles["Normal"]))
+  m_data = [[
+      Paragraph(
+          f"<b>Dias Registrados</b><br/><font size=14>{total_registros}/30</font>",
+          styles["Normal"],
+      ),
+      Paragraph(
+          f"<b>Taxa de Cumprimento</b><br/><font"
+          f" size=14>{taxa_eficiencia:.1f}%</font>",
+          styles["Normal"],
+      ),
+      Paragraph(
+          f"<b>Atalhos Gerados</b><br/><font size=14>{total_atalhos}</font>",
+          styles["Normal"],
+      ),
+      Paragraph(
+          f"<b>Nota da Supervisão</b><br/><font"
+          f" size=14>{nota_supervisao}/10</font>",
+          styles["Normal"],
+      ),
+  ]]
+  m_table = Table(m_data, colWidths=[130, 130, 130, 130])
+  m_table.setStyle(
+      TableStyle([
+          ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#F1F5F9")),
+          ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+          ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+          ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+          ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
+          ("TOPPADDING", (0, 0), (-1, -1), 8),
+          ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+      ])
+  )
+  elements.append(m_table)
   elements.append(Spacer(1, 15))
 
+  # Tabela Detalhada das Rotinas
+  elements.append(Paragraph("Acompanhamento das Rotinas Diárias", sec_title))
   dados_tabela = [
-      ["Dia", "Data", "P1", "P2", "P3", "P4", "P5", "P6", "Observações"]
+      ["Dia", "Data", "Filas", "Flash", "Avisos", "Bugs", "Atalhos", "Handover"]
   ]
 
   for _, row in df_analista.iterrows():
-    obs = row["observacoes"] if row["observacoes"] else "-"
     dados_tabela.append([
         f"Dia {row['dia_trabalho']}",
         row["data"],
@@ -125,13 +185,10 @@ def gerar_pdf_relatorio(df_analista, nome_analista):
         "✅" if row["p4"] else "❌",
         "✅" if row["p5"] else "❌",
         "✅" if row["p6"] else "❌",
-        Paragraph(obs, styles["BodyText"]),
     ])
 
-  tabela = Table(
-      dados_tabela, colWidths=[40, 65, 25, 25, 25, 25, 25, 25, 250]
-  )
-  tabela.setStyle(
+  t_detalhe = Table(dados_tabela, colWidths=[55, 75, 65, 65, 65, 65, 65, 65])
+  t_detalhe.setStyle(
       TableStyle([
           ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1E3A8A")),
           ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
@@ -139,34 +196,32 @@ def gerar_pdf_relatorio(df_analista, nome_analista):
           ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
           ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
           ("FONTSIZE", (0, 0), (-1, -1), 8),
-          ("BOTTOMPADDING", (0, 0), (-1, 0), 6),
-          ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#F3F4F6")),
-          ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#D1D5DB")),
+          ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E2E8F0")),
+          ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
       ])
   )
-  elements.append(tabela)
-  elements.append(Spacer(1, 20))
+  elements.append(t_detalhe)
+  elements.append(Spacer(1, 15))
 
-  if taxa_eficiencia >= 85:
-    conclusao_txt = f"<b>Conclusão de Eficiência:</b> O(a) analista {nome_analista} obteve um desempenho <b>EXCELENTE</b> ({taxa_eficiencia:.1f}%), demonstrando altíssimo engajamento no cumprimento diário de processos e rotinas operacionais."
-  elif taxa_eficiencia >= 70:
-    conclusao_txt = f"<b>Conclusão de Eficiência:</b> O(a) analista {nome_analista} apresentou um desempenho <b>BOM</b> ({taxa_eficiencia:.1f}%), mantendo boa regularidade, com oportunidades pontuais de melhoria na consistência diária."
-  else:
-    conclusao_txt = f"<b>Conclusão de Eficiência:</b> O(a) analista {nome_analista} registrou uma taxa de <b>ATENÇÃO</b> ({taxa_eficiencia:.1f}%). Recomenda-se alinhar em feedback os pontos de travamento ou esquecimento das rotinas marcadas com ❌."
-
+  # Parecer Final da Supervisão
   elements.append(
-      Paragraph(
-          conclusao_txt,
-          ParagraphStyle(
-              "ConcStyle",
-              parent=styles["Normal"],
-              borderColor=colors.HexColor("#1E3A8A"),
-              borderWidth=1,
-              borderPadding=8,
-              backColor=colors.HexColor("#EFF6FF"),
-          ),
-      )
+      Paragraph("Parecer Técnico & Feedback da Supervisão", sec_title)
   )
+  parecer_box = Paragraph(
+      f"<b>Avaliação Oficial:</b> {parecer_supervisao}", styles["Normal"]
+  )
+  t_parecer = Table([[parecer_box]], colWidths=[520])
+  t_parecer.setStyle(
+      TableStyle([
+          ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#EFF6FF")),
+          ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#3B82F6")),
+          ("TOPPADDING", (0, 0), (-1, -1), 10),
+          ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+          ("LEFTPADDING", (0, 0), (-1, -1), 10),
+          ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+      ])
+  )
+  elements.append(t_parecer)
 
   doc.build(elements)
   buffer.seek(0)
@@ -174,45 +229,78 @@ def gerar_pdf_relatorio(df_analista, nome_analista):
 
 
 # ==========================================
-# INTERFACE DO USUÁRIO (STREAMLIT)
+# INTERFACE PRINCIPAL DO STREAMLIT
 # ==========================================
-st.title("🔥 Sistema de Check-in Diário (Firebase)")
+st.sidebar.title("⚙️ Operações & Supervisão")
+st.sidebar.markdown(
+    "Acompanhamento em tempo real da equipe de suporte e análise."
+)
 
-aba1, aba2 = st.tabs([
-    "📝 Realizar Check-in Diário",
-    "📊 Relatórios & PDFs (Supervisão)",
-])
+menu = st.sidebar.radio(
+    "Navegação:",
+    [
+        "📝 Check-in Diário (Analista)",
+        "📊 Dashboard & Métricas (Supervisão)",
+        "🎯 Parecer & Emissão de PDF",
+    ],
+)
 
-# ----- ABA 1: FORMULÁRIO DE CHECK-IN -----
-with aba1:
-  st.subheader("Registrar Rotina Operacional")
+df_base = buscar_checkins_firebase()
 
-  col_a, col_b, col_c = st.columns(3)
-  with col_a:
-    analista = st.selectbox("Selecione o Analista:", ANALISTAS)
-  with col_b:
-    dia_trabalho = st.number_input(
-        "Dia de Trabalho (1 a 30):", min_value=1, max_value=30, value=1
-    )
-  with col_c:
-    data_hoje = st.date_input("Data:", date.today())
-
-  st.write("---")
-  st.markdown("### 📋 Marque as demandas concluídas no dia:")
-
-  p1 = st.checkbox(TAREFAS[0])
-  p2 = st.checkbox(TAREFAS[1])
-  p3 = st.checkbox(TAREFAS[2])
-  p4 = st.checkbox(TAREFAS[3])
-  p5 = st.checkbox(TAREFAS[4])
-  p6 = st.checkbox(TAREFAS[5])
-
-  obs = st.text_area(
-      "Observações/Justificativas do dia (opcional):",
-      placeholder="Ex: Instabilidade no sistema entre 14h e 15h.",
+# ------------------------------------------
+# MENU 1: CHECK-IN DIÁRIO (ANALISTA)
+# ------------------------------------------
+if menu == "📝 Check-in Diário (Analista)":
+  st.title("📝 Check-in Operacional Diário")
+  st.caption(
+      "Preencha o formulário ao final do turno para alimentar seu relatório"
+      " individual de desempenho."
   )
 
-  if st.button("💾 Salvar Check-in no Firebase", type="primary"):
+  with st.container():
+    c1, c2, c3 = st.columns(3)
+    with c1:
+      analista = st.selectbox("Analista Responsável:", ANALISTAS)
+    with c2:
+      dia_trabalho = st.number_input(
+          "Dia de Trabalho (1 a 30):", min_value=1, max_value=30, value=1
+      )
+    with c3:
+      data_hoje = st.date_input("Data de Registro:", date.today())
+
+  st.write("---")
+  st.subheader("📋 Validação de Processos Obrigatorios")
+
+  col_t1, col_t2 = st.columns(2)
+  with col_t1:
+    p1 = st.checkbox(TAREFAS[0])
+    p2 = st.checkbox(TAREFAS[1])
+    p3 = st.checkbox(TAREFAS[2])
+  with col_t2:
+    p4 = st.checkbox(TAREFAS[3])
+    p5 = st.checkbox(TAREFAS[4])
+    p6 = st.checkbox(TAREFAS[5])
+
+  st.write("---")
+  st.subheader("💡 Entregas & Ocorrências Especiais")
+
+  ca1, ca2 = st.columns(2)
+  with ca1:
+    qtd_atalhos = st.number_input(
+        "Quantidade de Atalhos/Macros criados/atualizados hoje:",
+        min_value=0,
+        value=0,
+    )
+  with ca2:
+    obs = st.text_area(
+        "Observações / Registro de Instabilidades no Turno:",
+        placeholder=(
+            "Informe aqui qualquer travamento, problema com provedor ou"
+            " ocorrência relevante."
+        ),
+    )
+
+  if st.button("🚀 Enviar Check-in Diário", type="primary", use_container_width=True):
     payload = {
         "data": str(data_hoje),
         "dia_trabalho": int(dia_trabalho),
@@ -223,65 +311,150 @@ with aba1:
         "p4": int(p4),
         "p5": int(p5),
         "p6": int(p6),
+        "qtd_atalhos": int(qtd_atalhos),
         "observacoes": obs,
     }
 
     if salvar_checkin_firebase(payload):
+      st.balloons()
       st.success(
-          f"Check-in do Dia {dia_trabalho} para {analista} salvo com sucesso na"
-          " nuvem!"
+          f"Check-in do Dia {dia_trabalho} enviado com sucesso para a base da"
+          " supervisão!"
       )
     else:
-      st.error("Não foi possível salvar os dados. Verifique a conexão.")
+      st.error("Falha ao salvar dados no banco de dados. Tente novamente.")
 
-# ----- ABA 2: RELATÓRIOS E GERADOR DE PDF -----
-with aba2:
-  st.subheader("Painel de Acompanhamento (Em Tempo Real)")
+# ------------------------------------------
+# MENU 2: DASHBOARD INTERATIVO
+# ------------------------------------------
+elif menu == "📊 Dashboard & Métricas (Supervisão)":
+  st.title("📊 Painel de Controle e Métricas de Desempenho")
 
-  df = buscar_checkins_firebase()
-
-  if not df.empty:
-    analista_sel = st.selectbox(
-        "Filtrar por Analista para Relatório:", ANALISTAS
-    )
-    df_filtrado = (
-        df[df["analista"] == analista_sel]
+  if not df_base.empty:
+    analista_sel = st.selectbox("Filtrar Visão Por Analista:", ANALISTAS)
+    df_f = (
+        df_base[df_base["analista"] == analista_sel]
         .sort_values(by="dia_trabalho")
         .reset_index(drop=True)
     )
 
-    if not df_filtrado.empty:
-      st.write(
-          f"### Histórico de Registros - {analista_sel} ({len(df_filtrado)}/30"
-          " dias)"
+    if not df_f.empty:
+      # KPIs Superiores
+      total_dias = len(df_f)
+      total_possivel = total_dias * 6
+      total_concluido = df_f[["p1", "p2", "p3", "p4", "p5", "p6"]].sum().sum()
+      taxa_eficiencia = (
+          (total_concluido / total_possivel * 100) if total_possivel > 0 else 0
       )
-      st.dataframe(
-          df_filtrado[
-              [
-                  "dia_trabalho",
-                  "data",
-                  "p1",
-                  "p2",
-                  "p3",
-                  "p4",
-                  "p5",
-                  "p6",
-                  "observacoes",
-              ]
-          ],
-          use_container_width=True,
+      total_atalhos = (
+          df_f["qtd_atalhos"].sum() if "qtd_atalhos" in df_f else 0
       )
 
-      pdf_bytes = gerar_pdf_relatorio(df_filtrado, analista_sel)
+      k1, k2, k3, k4 = st.columns(4)
+      k1.metric("Dias Registrados", f"{total_dias} / 30")
+      k2.metric("Aproveitamento Geral", f"{taxa_eficiencia:.1f}%")
+      k3.metric("Atalhos Criados", f"{total_atalhos}")
+      k4.metric(
+          "Status da Meta",
+          "Excelente"
+          if taxa_eficiencia >= 85
+          else ("Regular" if taxa_eficiencia >= 70 else "Atenção"),
+      )
+
+      st.write("---")
+
+      # Gráficos Interativos (Plotly)
+      g1, g2 = st.columns(2)
+
+      with g1:
+        st.subheader("📈 Evolução da Eficiência por Dia")
+        df_f["tarefas_dia"] = (
+            df_f[["p1", "p2", "p3", "p4", "p5", "p6"]].sum(axis=1) / 6 * 100
+        )
+        fig_linha = px.line(
+            df_f,
+            x="dia_trabalho",
+            y="tarefas_dia",
+            markers=True,
+            labels={"dia_trabalho": "Dia de Trabalho", "tarefas_dia": "Cumprimento (%)"},
+            title=f"Consistência Diária - {analista_sel}",
+        )
+        fig_linha.update_yaxes(range=[0, 105])
+        st.plotly_chart(fig_linha, use_container_width=True)
+
+      with g2:
+        st.subheader("🎯 Cumprimento por Categoria de Tarefa")
+        totais_tarefas = [
+            df_f["p1"].sum(),
+            df_f["p2"].sum(),
+            df_f["p3"].sum(),
+            df_f["p4"].sum(),
+            df_f["p5"].sum(),
+            df_f["p6"].sum(),
+        ]
+        nomes_curtos = ["Filas", "Flash", "Avisos", "Bugs", "Atalhos", "Handover"]
+        df_pizza = pd.DataFrame(
+            {"Processo": nomes_curtos, "Concluídos": totais_tarefas}
+        )
+        fig_barras = px.bar(
+            df_pizza,
+            x="Processo",
+            y="Concluídos",
+            color="Processo",
+            title="Distribuição de Tarefas Cumpridas",
+        )
+        st.plotly_chart(fig_barras, use_container_width=True)
+
+      st.subheader("📋 Tabela Detalhada de Lançamentos")
+      st.dataframe(df_f, use_container_width=True)
+
+    else:
+      st.info(f"Nenhum registro encontrado para {analista_sel}.")
+  else:
+    st.info("Nenhum dado cadastrado no sistema até o momento.")
+
+# ------------------------------------------
+# MENU 3: RELATÓRIO EXECUTIVO & PDF
+# ------------------------------------------
+elif menu == "🎯 Parecer & Emissão de PDF":
+  st.title("🎯 Fechamento de Ciclo & Emissão de Relatório")
+
+  if not df_base.empty:
+    analista_sel = st.selectbox("Selecione o Analista para Fechamento:", ANALISTAS)
+    df_f = (
+        df_base[df_base["analista"] == analista_sel]
+        .sort_values(by="dia_trabalho")
+        .reset_index(drop=True)
+    )
+
+    if not df_f.empty:
+      st.write("---")
+      st.subheader(f"📝 Avaliação do Supervisor para {analista_sel}")
+
+      nota = st.slider("Nota de Desempenho Geral (0 a 10):", 0.0, 10.0, 8.5, 0.5)
+      parecer = st.text_area(
+          "Parecer Técnico e Feedback da Supervisão:",
+          value=(
+              f"O(A) analista {analista_sel} demonstrou excelente"
+              " compromisso com a rotina operacional ao longo do período,"
+              " mantendo boa consistência na verificação do Flash e controle de"
+              " pendências."
+          ),
+      )
+
+      st.write("---")
+
+      pdf_bytes = gerar_pdf_executivo(df_f, analista_sel, nota, parecer)
 
       st.download_button(
-          label=f"📄 Baixar Relatório PDF de {analista_sel}",
+          label=f"📄 Gerar & Baixar Relatório Executivo em PDF ({analista_sel})",
           data=pdf_bytes,
-          file_name=f"Relatorio_30Dias_{analista_sel}.pdf",
+          file_name=f"Relatorio_Executivo_{analista_sel}.pdf",
           mime="application/pdf",
           type="primary",
+          use_container_width=True,
       )
     else:
-      st.info(f"Nenhum registro encontrado no Firebase para {analista_sel}.")
+      st.info(f"Sem dados suficientes para gerar relatório de {analista_sel}.")
   else:
-    st.info("Nenhum check-in registrado no banco de dados até o momento.")
+    st.info("Nenhum dado encontrado no Firebase.")
